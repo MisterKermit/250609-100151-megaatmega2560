@@ -10,35 +10,30 @@ avrdude: stk500v2_getsync(): timeout communicating with programmer
 #define VRXPIN A0
 #define VRYPIN A1
 
-#define LinacA 26
-#define LinacB 27
+#define LinacA 48
+#define LinacB 46
 #define LinacPosPin A3
 #define ENA 12
 
 
 //back and front proximity sensors
-#define UltraFrontTrig 52
-#define UltraFrontEcho 50
+#define UltraFrontTrig 49
+#define UltraFrontEcho 51
 
-#define UltraBackTrig 53
-#define UltraBackEcho 51
+#define UltraBackTrig 45
+#define UltraBackEcho 47
 
 //Head array sensors
 #define ultra_left_trig 13
 #define ultra_left_echo 12
 
-// #define ultra_right_trig
-// #define ultra_right_echo
-
-// #define ultra_fender_trig
-// #define ultra_right_echo
 
 //control panel
-#define UltrasonicButton 31  //ultra toggle
+#define UltrasonicButton 28  //ultra toggle
 #define Potentiometer A3     //motor speed
 //kill switch
-#define StopButton 35
-#define StopLED 37
+#define StopButton 29
+#define StopLED 2
 
 #define ForwardButton 35
 #define RightButton 37
@@ -49,7 +44,16 @@ avrdude: stk500v2_getsync(): timeout communicating with programmer
 #define motor1b 8
 
 #define LinacUpperLimit 380
-#define LinacLowerLimit 194
+#define LinacLowerLimit 220
+
+// #define ultra_left_trig
+// #define ultra_left_echo 
+
+// #define ultra_right_trig 
+// #define ultra_right_echo 
+
+// #define ultra_back_trig 
+// #define ultra_back_echo 
 
 
 int RealLinacPos;
@@ -85,26 +89,13 @@ enum head_array_state {
   RIGHT,
   BACK,
   NONE
-}  head_array_state;
-
-//change values
-// int ultra_left_trig =
-// int ultra_left_echo =
-
-// int ultra_right_trig =
-// int ultra_right_echo =
-
-// int ultra_fender_trig =
-// int ultra_fender_echo =
+} ;
 
 
-// int UltrasonicButton = 36;
 
-//Misc Setup
-// int Potentiometer = A3;
+
 
 //Killswitch Setup
-// int StopButton = 35;
 int PreviousStopButtonState;
 int CurrentStopButtonState;
 int StopStatus;
@@ -128,10 +119,12 @@ private:
   byte trigger_pin;
   float duration;
   int distance;
+  head_array_state state;
 public:
-  Ultrasonic(byte e_pin, byte t_pin) {
+  Ultrasonic(byte e_pin, byte t_pin, head_array_state s_state) {
     echo_pin = e_pin;
     trigger_pin = t_pin;
+    state = s_state;
     init();
   }
 
@@ -165,19 +158,34 @@ public:
     delay(100);
   }
 
+  int get_dist() {
+    return distance;
+  }
+
   
-  bool proximity_fb() {
-    return update() < 40;
+  bool check_prox() {
+    if (digitalRead(UltrasonicButton) == HIGH) {
+        return update() > 30;
+    } else {
+      return true;
+    }
   }
 };
 
-Ultrasonic ultra_front(UltraFrontEcho, UltraFrontTrig);
-Ultrasonic ultra_back(UltraBackEcho, UltraBackTrig);
-// Ultrasonic ultra_left(ultra_left_echo, ultra_left_trig);
+void ramp_speed(int maxSpeed) {
+  if (ButtonMotorSpeed < maxSpeed) {
+    ButtonMotorSpeed++;
+  }
+}
 
-Ultrasonic my_Ultrasonics[] = { ultra_front, ultra_back};
+Ultrasonic ultra_front(UltraFrontEcho, UltraFrontTrig, NONE);
+Ultrasonic ultra_back(UltraBackEcho, UltraBackTrig, NONE);
+// Ultrasonic ultra_left(ultra_left_echo, ultra_left_trig, LEFT);
+// Ultrasonic ultra_right(ultra_right_echo, ultra_right_trig, RIGHT);
+// Ultrasonic ultra_back(ultra_back_echo, ultra_back_trig, BACK);
 
 
+Ultrasonic head_array[] ={};
 
 void setup() {
   //Motors
@@ -196,16 +204,18 @@ void setup() {
   pinMode(UltraBackEcho, INPUT);
   // pinMode(ultra_left_echo, INPUT);
   // pinMode(ultra_left_trig, OUTPUT);
-  // pinMode(UltrasonicButton, INPUT);
+  pinMode(UltrasonicButton, INPUT);
   ProxFront = 0;
   ProxBack = 0;
+
 
   //Misc
   pinMode(Potentiometer, INPUT);
 
   //Killswitch
-  // pinMode(StopButton, INPUT);
-  // pinMode(StopLED, OUTPUT);
+  pinMode(StopButton, INPUT);
+  pinMode(StopButton, INPUT);
+  pinMode(StopLED, OUTPUT);
   StopStatus = 0;
 
   //Buttons
@@ -226,42 +236,16 @@ void setup() {
   yRestMin = 512;
   yRestMax = 650;
 
-  
-  Serial.begin(9600);
+
+Serial.begin(9600);
+
 }
 
-void ramp_speed(int maxSpeed) {
-  if (ButtonMotorSpeed < maxSpeed) {
-    ButtonMotorSpeed++;
-  }
-}
+
 
 
 //ULtrasonic sensor detection
-// int check_prox(Ultrasonic sensor) {
-//   // float ultra_distance;
-//   if (digitalRead(UltrasonicButton) == 1) {
-//     if (sensor.proximity_fb()) {
-//       if (i == 0) {
-//         ProxFront = 1;
-//         return ProxFront;
-//       } else {
-//         ProxBack = 1;
-//         return ProxBack;
-//       }
-//     } else {
-//       if (i == 0) {
-//         ProxFront = 0;
-//         return ProxFront;
-//       } else {
-//         ProxBack = 0;
-//         return ProxBack;
-//       }
-//     }
-//   } else {
-//     return 0;
-//   }
-// }
+
 
 void loop() {
 
@@ -270,9 +254,9 @@ void loop() {
   int MaxMotorSpeed = map(analogRead(Potentiometer), 0, 1023, 25, 255);  //last number value is max motor speed
 
 
-  // RealLinacPos = analogRead(LinacPosPin);
-  //Serial.print("Linear Actuator Position:");
-  // Serial.println(RealLinacPos);
+  RealLinacPos = analogRead(LinacPosPin);
+  // Serial.print("Linear Atuator Position:");
+  Serial.println(RealLinacPos);
 
   //Serial.println(NegativeyValue);
   
@@ -287,25 +271,18 @@ void loop() {
 
 
 
+
+
+
   // Serial.println(inputs[0].value);
   // ProxBack = check_prox(ultra_back);
   // ProxFront = check_prox(ultra_front);
-
-  // for (int i = 0; i <= 3; i++) {
-  //   inputs[i].value = digitalRead(inputs[i].buttonPin);
-  //   check_button(inputs[i].motorPin, inputs[i].value, MaxMotorSpeed);
-  // }
-// int distance_values[] = { my_Ultrasonics[2].get_dist() };
 
 
   // distance_values[0] = my_Ultrasonics[0].check_prox();
   // distance_values[1] = my_Ultrasonics[1].check_prox();
   // distance_values[2] =
 
-  // for (int j = 0; j < 2; j++) {
-  //   distance_values[j] = my_Ultrasonics[j].check_prox();
-  //   // Serial.println(distance_values[j]);
-  // }
 
   // float distance_chosen = min(min(distance_values[0], distance_values[1]), distance_values[2]);
   //int distance_chosen = distance_values[0];
@@ -352,72 +329,61 @@ void loop() {
   //   digitalWrite(LinacB, LOW);
   // }
 
-  
+  //Estop
+  PreviousStopButtonState = CurrentStopButtonState;
+  CurrentStopButtonState = (digitalRead(StopButton));
 
-  if ((Forward == HIGH)) {
-    Serial.println("Forward");
-    ramp_speed(MaxMotorSpeed);
-    analogWrite(motor1a, ButtonMotorSpeed);
-    digitalWrite(motor1b, LOW);  //WIP
+  if ((CurrentStopButtonState == 1) && (PreviousStopButtonState == 0)) {
+    if (StopStatus == 0) {
+      StopStatus = 1;
+    } else if (StopStatus == 1) {
+      StopStatus = 0;
+    }
+  }
+  if (StopStatus == 1) {
+    digitalWrite(StopLED, HIGH);
+  } else if (StopStatus == 0) {
+    digitalWrite(StopLED, LOW);
+  }
 
-  } else if ((Right == HIGH)) {
-    Serial.println("Right");
-    if (RealLinacPos < LinacUpperLimit) {
-      digitalWrite(LinacA, HIGH);
-      digitalWrite(LinacB, LOW);
-    }
-      //  Serial.println("WORk");
-  } else if ((Left == HIGH)) {
-    Serial.println("Left");
-    if (RealLinacPos > LinacLowerLimit) {
-      digitalWrite(LinacB, HIGH);
-      digitalWrite(LinacA, LOW);
-    }
-  } else if (Back == HIGH) {
-    Serial.println("Back");
-    ramp_speed(MaxMotorSpeed);
-    digitalWrite(motor1a, LOW);
-    analogWrite(motor1b, ButtonMotorSpeed);
-  } else {
-    digitalWrite(motor1a, LOW);
-    digitalWrite(motor1b, LOW);
-    // analogWrite(i, 1);
-    ButtonMotorSpeed = 25;
+  //Drive Controls
+
+  if (StopStatus == 0) {
+    if (Forward == HIGH && ultra_front.check_prox()) {
+        Serial.println("Forward");
+        ramp_speed(MaxMotorSpeed);
+        analogWrite(motor1a, ButtonMotorSpeed);
+        digitalWrite(motor1b, LOW);  //WIP
+
+      } else if (Right == HIGH && RealLinacPos < LinacUpperLimit) {
+        Serial.println("Right");
+        digitalWrite(LinacA, HIGH);
+        digitalWrite(LinacB, LOW);
+          //  Serial.println("WORk");
+      } else if (Left == HIGH && RealLinacPos > LinacLowerLimit) {
+        Serial.println("Left");
+        digitalWrite(LinacB, HIGH);
+        digitalWrite(LinacA, LOW);
+      } else if (Back == HIGH && (ultra_back.check_prox())) {
+        Serial.println("Back");
+        ramp_speed(MaxMotorSpeed);
+        digitalWrite(motor1a, LOW);
+        analogWrite(motor1b, ButtonMotorSpeed);
+      } else {
+      
+        digitalWrite(motor1a, LOW);
+        digitalWrite(motor1b, LOW);
+        digitalWrite(LinacA, LOW);
+        digitalWrite(LinacB, LOW);
+      
+        // analogWrite(i, 1);
+        ButtonMotorSpeed = 25;
+      }
   }
 
 
 
-  //head array
-  // Ultrasonic ultra_right(ultra_right_echo, ultra_right_trig);
-  // Ultrasonic ultra_fender(ultra_fender_echo, ultra_fender_trig);
-
-
-  //change pins
-
-  // Serial.println(ProxFront);
-  // Serial.println(ProxBack);
-  // Serial.println(digitalRead(UltrasonicButton));
-
-  
-
-
-
-  //Killswitch
-  // PreviousStopButtonState = CurrentStopButtonState;
-  // CurrentStopButtonState = (digitalRead(StopButton));
-
-  // if ((CurrentStopButtonState == 1) && (PreviousStopButtonState == 0)) {
-  //   if (StopStatus == 0) {
-  //     StopStatus = 1;
-  //   } else if (StopStatus == 1) {
-  //     StopStatus = 0;
-  //   }
-  // }
-  // if (StopStatus == 1) {
-  //   digitalWrite(StopLED, HIGH);
-  // } else if (StopStatus == 0) {
-  //   digitalWrite(StopLED, LOW);
-  // }
+ 
 
   
   delay(100);
