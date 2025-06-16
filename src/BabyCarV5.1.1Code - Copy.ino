@@ -5,7 +5,6 @@ avrdude: stk500v2_getsync(): timeout communicating with programmer
 
 */
 #include <Arduino.h>
-#include <ArrayList.h>
 //Joystick Setup
 #define VRXPIN A0
 #define VRYPIN A1
@@ -24,12 +23,17 @@ avrdude: stk500v2_getsync(): timeout communicating with programmer
 #define UltraBackEcho 47
 
 //Head array sensors
-#define ultra_left_trig 13
-#define ultra_left_echo 12
+#define ultra_left_trig 24
+#define ultra_left_echo 25
 
+#define ultra_right_trig 22
+#define ultra_right_echo 23
 
+#define ultra_back_trig 34
+#define ultra_back_echo 36
 //control panel
 #define UltrasonicButton 28  //ultra toggle
+#define HeadArrayButton 30
 #define Potentiometer A3     //motor speed
 //kill switch
 #define StopButton 29
@@ -46,16 +50,6 @@ avrdude: stk500v2_getsync(): timeout communicating with programmer
 #define LinacUpperLimit 380
 #define LinacLowerLimit 220
 
-// #define ultra_left_trig
-// #define ultra_left_echo 
-
-// #define ultra_right_trig 
-// #define ultra_right_echo 
-
-// #define ultra_back_trig 
-// #define ultra_back_echo 
-
-
 int RealLinacPos;
 
 //Ultrasonic Setup
@@ -64,12 +58,9 @@ int ProxFront;
 long duration1;
 int distance1;
 
-
 int ProxBack;
 long duration2;
 int distance2;
-
-
 
 int Forward;
 int Right;
@@ -78,22 +69,12 @@ int Back;
 
 int ButtonMotorSpeed = 10;
 
-
-
-
-
-
-
 enum head_array_state {
   LEFT,
   RIGHT,
   BACK,
   NONE
 } ;
-
-
-
-
 
 //Killswitch Setup
 int PreviousStopButtonState;
@@ -112,6 +93,9 @@ int yRestMin;
 
 int yRestMax;
 
+unsigned long t0;
+unsigned long elapsed;
+
 
 class Ultrasonic {
 private:
@@ -129,13 +113,13 @@ public:
   }
 
   void init() {
-    Serial.begin(9600);
+    pinMode(echo_pin, INPUT);
+    pinMode(trigger_pin, OUTPUT);
     update();
   }
 
   int update() {
-    pinMode(echo_pin, INPUT);
-    pinMode(trigger_pin, OUTPUT);
+    
     digitalWrite(trigger_pin, LOW);
     // digitalWrite(echo_pin, LOW);
     delayMicroseconds(2);
@@ -162,10 +146,22 @@ public:
     return distance;
   }
 
+  head_array_state get_state() {
+    return state;
+  }
+
   
   bool check_prox() {
     if (digitalRead(UltrasonicButton) == HIGH) {
         return update() > 30;
+    } else {
+      return true;
+    }
+  }
+
+  bool check_head_array() {
+    if (digitalRead(HeadArrayButton) == HIGH) {
+      return update() > 30;
     } else {
       return true;
     }
@@ -180,12 +176,32 @@ void ramp_speed(int maxSpeed) {
 
 Ultrasonic ultra_front(UltraFrontEcho, UltraFrontTrig, NONE);
 Ultrasonic ultra_back(UltraBackEcho, UltraBackTrig, NONE);
-// Ultrasonic ultra_left(ultra_left_echo, ultra_left_trig, LEFT);
-// Ultrasonic ultra_right(ultra_right_echo, ultra_right_trig, RIGHT);
-// Ultrasonic ultra_back(ultra_back_echo, ultra_back_trig, BACK);
+Ultrasonic ultra_left(ultra_left_echo, ultra_left_trig, LEFT);
+Ultrasonic ultra_right(ultra_right_echo, ultra_right_trig, RIGHT);
+Ultrasonic head_ultra_back(ultra_back_echo, ultra_back_trig, BACK);
 
 
-Ultrasonic head_array[] ={};
+Ultrasonic head_array[] = {ultra_left, ultra_right, head_ultra_back};
+
+
+head_array_state check_head_array() {
+  head_array[0].update();
+  head_array[1].update();
+  head_array[2].update();
+
+  int min_value = min(min(head_array[0].get_dist(), head_array[1].get_dist()), head_array[2].get_dist());
+
+  if (min_value >= 30) {
+    return NONE;
+  } else {
+    for (int i = 0; i <= 2; i++) {
+      if (min_value == head_array[i].get_dist()) {
+        return head_array[i].get_state();
+      }
+    }
+    return NONE;
+  }
+}
 
 void setup() {
   //Motors
@@ -200,11 +216,21 @@ void setup() {
   //Ultrasonic Sensors
   pinMode(UltraFrontTrig, OUTPUT);
   pinMode(UltraFrontEcho, INPUT);
+
   pinMode(UltraBackTrig, OUTPUT);
   pinMode(UltraBackEcho, INPUT);
-  // pinMode(ultra_left_echo, INPUT);
-  // pinMode(ultra_left_trig, OUTPUT);
+
+  pinMode(ultra_left_echo, INPUT);
+  pinMode(ultra_left_trig, OUTPUT);
+
+  pinMode(ultra_right_echo, INPUT);
+  pinMode(ultra_right_trig, OUTPUT);
+
+  pinMode(ultra_back_echo, INPUT);
+  pinMode(ultra_back_trig, OUTPUT);
+
   pinMode(UltrasonicButton, INPUT);
+  pinMode(HeadArrayButton, INPUT);
   ProxFront = 0;
   ProxBack = 0;
 
@@ -213,7 +239,6 @@ void setup() {
   pinMode(Potentiometer, INPUT);
 
   //Killswitch
-  pinMode(StopButton, INPUT);
   pinMode(StopButton, INPUT);
   pinMode(StopLED, OUTPUT);
   StopStatus = 0;
@@ -236,18 +261,20 @@ void setup() {
   yRestMin = 512;
   yRestMax = 650;
 
+ 
 
-Serial.begin(9600);
+
+  Serial.begin(9600);
 
 }
 
 
-
-
-//ULtrasonic sensor detection
-
-
 void loop() {
+  t0 = micros();
+// loop logic
+  elapsed = micros() - t0;
+  Serial.println(elapsed);
+
 
   //Changing Values;
 
@@ -268,66 +295,7 @@ void loop() {
   Left = digitalRead(LeftButton);
   Right = digitalRead(RightButton);
 
-
-
-
-
-
-
-  // Serial.println(inputs[0].value);
-  // ProxBack = check_prox(ultra_back);
-  // ProxFront = check_prox(ultra_front);
-
-
-  // distance_values[0] = my_Ultrasonics[0].check_prox();
-  // distance_values[1] = my_Ultrasonics[1].check_prox();
-  // distance_values[2] =
-
-
-  // float distance_chosen = min(min(distance_values[0], distance_values[1]), distance_values[2]);
-  //int distance_chosen = distance_values[0];
   
-  // Serial.println(distance_chosen);
-  // put threshold
-  /*
-  if (distance_chosen < 10 && digitalRead(UltrasonicButton) == 1) {
-    if (distance_chosen == distance_values[0] && ProxFront == 0) {
-      head_array_state = LEFT;
-      Serial.println("left");
-    if (RealLinacPos > LinacExtendMin) {
-      digitalWrite(LinacA, HIGH);
-      digitalWrite(LinacB, LOW);
-    }
-    } else if (distance_chosen == distance_values[1]) {
-      head_array_state = BACK;
-      Serial.println("front");
-    } else if (distance_chosen == distance_values[2]) {
-      head_array_state = RIGHT;
-      Serial.println("right");
-    } else {
-      head_array_state = NONE;
-      Serial.println("none");
-    }
-  } else {
-    // Serial.println("join the glorius ovulation");
-  }
-  // Serial.println(ProxFront);
-
-*/
-
-  // //End of Linear Actuator No Input Commands
-  // else if ((xValue > RealLinacPos) && (xValue > xRestMax) && (StopStatus == 0)) {
-  //   digitalWrite(LinacA, HIGH);
-  //   digitalWrite(LinacB, LOW);
-  // }
-  // else if ((xValue < RealLinacPos) && (xValue < xRestMin) && (StopStatus == 0)) {
-  //   digitalWrite(LinacA, LOW);
-  //   digitalWrite(LinacB, HIGH);
-  // }
-  // else {
-  //   digitalWrite(LinacA, LOW);
-  //   digitalWrite(LinacB, LOW);
-  // }
 
   //Estop
   PreviousStopButtonState = CurrentStopButtonState;
@@ -359,7 +327,6 @@ void loop() {
         Serial.println("Right");
         digitalWrite(LinacA, HIGH);
         digitalWrite(LinacB, LOW);
-          //  Serial.println("WORk");
       } else if (Left == HIGH && RealLinacPos > LinacLowerLimit) {
         Serial.println("Left");
         digitalWrite(LinacB, HIGH);
@@ -369,22 +336,54 @@ void loop() {
         ramp_speed(MaxMotorSpeed);
         digitalWrite(motor1a, LOW);
         analogWrite(motor1b, ButtonMotorSpeed);
+      } else if (digitalRead(HeadArrayButton) == HIGH) {
+        switch(check_head_array()) {
+          case LEFT:
+            Serial.println("L");
+            if (RealLinacPos > LinacLowerLimit) {
+              digitalWrite(LinacB, HIGH);
+              digitalWrite(LinacA, LOW);
+            } else {
+              digitalWrite(LinacB, LOW);
+              digitalWrite(LinacA, LOW);
+            }
+            break;
+          case RIGHT:
+            Serial.println("R");
+            if (RealLinacPos <= LinacUpperLimit) {
+              digitalWrite(LinacA, HIGH);
+              digitalWrite(LinacB, LOW);
+            } else {
+              digitalWrite(LinacB, LOW);
+              digitalWrite(LinacA, LOW);
+            }
+            break;
+          case BACK:
+            Serial.println("B");
+            if (ultra_back.check_prox()) {
+              ramp_speed(MaxMotorSpeed);
+              digitalWrite(motor1a, LOW);
+              analogWrite(motor1b, ButtonMotorSpeed);
+            }
+            break;
+          case NONE:
+            digitalWrite(motor1a, LOW);
+            digitalWrite(motor1b, LOW);
+            digitalWrite(LinacA, LOW);
+            digitalWrite(LinacB, LOW); 
+
+            ButtonMotorSpeed = 25;
+            break;
+        }
       } else {
-      
         digitalWrite(motor1a, LOW);
         digitalWrite(motor1b, LOW);
         digitalWrite(LinacA, LOW);
-        digitalWrite(LinacB, LOW);
-      
-        // analogWrite(i, 1);
+        digitalWrite(LinacB, LOW); 
+
         ButtonMotorSpeed = 25;
       }
   }
-
-
-
- 
-
   
   delay(100);
 }
