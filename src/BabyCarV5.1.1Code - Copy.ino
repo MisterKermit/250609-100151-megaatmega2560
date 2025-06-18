@@ -265,7 +265,7 @@ void setup() {
 
 
   Serial.begin(9600);
-
+  Serial1.begin(9600);
 }
 
 
@@ -274,7 +274,6 @@ void loop() {
 // loop logic
   elapsed = micros() - t0;
   Serial.println(elapsed);
-
 
   //Changing Values;
 
@@ -384,6 +383,11 @@ void loop() {
         ButtonMotorSpeed = 25;
       }
   }
-  
+
+  //Send MaxMotorSpeed, Head Array Status, Prox,
+  Serial1.print(MaxMotorSpeed);
+
+
+
   delay(100);
 }
