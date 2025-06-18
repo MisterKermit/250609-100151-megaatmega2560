@@ -29,8 +29,8 @@ avrdude: stk500v2_getsync(): timeout communicating with programmer
 #define ultra_right_trig 22
 #define ultra_right_echo 23
 
-#define ultra_back_trig 34
-#define ultra_back_echo 36
+#define ultra_back_trig 26
+#define ultra_back_echo 27
 //control panel
 #define UltrasonicButton 28  //ultra toggle
 #define HeadArrayButton 30
