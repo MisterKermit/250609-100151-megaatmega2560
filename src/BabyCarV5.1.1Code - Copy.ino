@@ -34,7 +34,7 @@ avrdude: stk500v2_getsync(): timeout communicating with programmer
 //control panel
 #define UltrasonicButton 28  //ultra toggle
 #define HeadArrayButton 30
-#define Potentiometer A3     //motor speed
+#define Potentiometer A14     //motor speed
 //kill switch
 #define StopButton 29
 #define StopLED 2
@@ -282,7 +282,6 @@ void loop() {
 
   RealLinacPos = analogRead(LinacPosPin);
   // Serial.print("Linear Atuator Position:");
-  Serial.println(RealLinacPos);
 
   //Serial.println(NegativeyValue);
   
@@ -313,7 +312,9 @@ void loop() {
     digitalWrite(StopLED, LOW);
   }
 
-  //Drive Controls
+  //Drive Controlss
+  String haStatus;
+  String proxStatus;
 
   if (StopStatus == 0) {
     if (Forward == HIGH && ultra_front.check_prox()) {
@@ -321,7 +322,6 @@ void loop() {
         ramp_speed(MaxMotorSpeed);
         analogWrite(motor1a, ButtonMotorSpeed);
         digitalWrite(motor1b, LOW);  //WIP
-
       } else if (Right == HIGH && RealLinacPos < LinacUpperLimit) {
         Serial.println("Right");
         digitalWrite(LinacA, HIGH);
@@ -346,6 +346,7 @@ void loop() {
               digitalWrite(LinacB, LOW);
               digitalWrite(LinacA, LOW);
             }
+            haStatus = "LEFT";
             break;
           case RIGHT:
             Serial.println("R");
@@ -356,6 +357,7 @@ void loop() {
               digitalWrite(LinacB, LOW);
               digitalWrite(LinacA, LOW);
             }
+            haStatus = "RIGHT";
             break;
           case BACK:
             Serial.println("B");
@@ -363,14 +365,29 @@ void loop() {
               ramp_speed(MaxMotorSpeed);
               digitalWrite(motor1a, LOW);
               analogWrite(motor1b, ButtonMotorSpeed);
-            }
+            } 
             break;
           case NONE:
             digitalWrite(motor1a, LOW);
             digitalWrite(motor1b, LOW);
             digitalWrite(LinacA, LOW);
             digitalWrite(LinacB, LOW); 
+            haStatus = "NONE";
 
+            if (digitalRead(UltrasonicButton)) {
+              if (!ultra_back.check_prox()) {
+                proxStatus = "BACK";
+              } else if (!ultra_front.check_prox()) {
+                proxStatus = "FRONT";
+              } else if (!ultra_back.check_prox() && !ultra_front.check_prox()){
+                proxStatus = "BACK";
+              } else {
+                proxStatus = "NONE";
+              }
+            } else {
+              proxStatus = "OFF";
+            }
+            
             ButtonMotorSpeed = 25;
             break;
         }
@@ -379,15 +396,18 @@ void loop() {
         digitalWrite(motor1b, LOW);
         digitalWrite(LinacA, LOW);
         digitalWrite(LinacB, LOW); 
-
+        haStatus = "OFF";
         ButtonMotorSpeed = 25;
       }
   }
+ 
+  char sendData[100];
+
+  Serial1.write(sendData);
+  snprintf(sendData, sizeof(sendData), "<MS: ,%i, HA: ,%s,P: ,%s>", MaxMotorSpeed, haStatus, proxStatus);
 
   //Send MaxMotorSpeed, Head Array Status, Prox,
-  Serial1.print(MaxMotorSpeed);
-
-
-
+  // Serial1.print("<MS, 1, HA, 0, P, 2>");
+  
   delay(100);
 }
