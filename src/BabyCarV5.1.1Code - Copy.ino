@@ -23,14 +23,14 @@ avrdude: stk500v2_getsync(): timeout communicating with programmer
 #define UltraBackEcho 47
 
 //Head array sensors
-#define ultra_left_trig 24
-#define ultra_left_echo 25
+#define ultra_left_trig 22
+#define ultra_left_echo 23
 
-#define ultra_right_trig 22
-#define ultra_right_echo 23
+#define ultra_right_trig 24
+#define ultra_right_echo 25
 
-#define ultra_back_trig 26
-#define ultra_back_echo 27
+#define ultra_back_trig 32
+#define ultra_back_echo 33
 //control panel
 #define UltrasonicButton 28  //ultra toggle
 #define HeadArrayButton 30
@@ -72,7 +72,7 @@ int ButtonMotorSpeed = 10;
 enum head_array_state {
   LEFT,
   RIGHT,
-  BACK,
+  FRONT,
   NONE
 } ;
 
@@ -131,13 +131,20 @@ public:
 
     digitalWrite(trigger_pin, LOW);
     // digitalWrite(echo_pin, LOW);
+    delayMicroseconds(10);
 
-    duration = pulseIn(echo_pin, HIGH);
+
+    duration = pulseIn(echo_pin, HIGH, 10000);
     //duration2 = pulseIn(UltraBackEcho, HIGH);
     // Reads the echoPin, returns the sound wave travel time in microseconds
 
     // Calculating the distance
     distance = duration * 0.034 / 2;
+
+    if (distance == 0) {
+      distance = 1000;
+    }
+
     return distance;
     delay(100);
   }
@@ -178,7 +185,7 @@ Ultrasonic ultra_front(UltraFrontEcho, UltraFrontTrig, NONE);
 Ultrasonic ultra_back(UltraBackEcho, UltraBackTrig, NONE);
 Ultrasonic ultra_left(ultra_left_echo, ultra_left_trig, LEFT);
 Ultrasonic ultra_right(ultra_right_echo, ultra_right_trig, RIGHT);
-Ultrasonic head_ultra_back(ultra_back_echo, ultra_back_trig, BACK);
+Ultrasonic head_ultra_back(ultra_back_echo, ultra_back_trig, FRONT);
 
 
 Ultrasonic head_array[] = {ultra_left, ultra_right, head_ultra_back};
@@ -191,7 +198,7 @@ head_array_state check_head_array() {
 
   int min_value = min(min(head_array[0].get_dist(), head_array[1].get_dist()), head_array[2].get_dist());
 
-  if (min_value >= 30) {
+  if (min_value >= 30 || min_value == 0) {
     return NONE;
   } else {
     for (int i = 0; i <= 2; i++) {
@@ -231,8 +238,6 @@ void setup() {
 
   pinMode(UltrasonicButton, INPUT);
   pinMode(HeadArrayButton, INPUT);
-  ProxFront = 0;
-  ProxBack = 0;
 
 
   //Misc
@@ -249,21 +254,6 @@ void setup() {
   pinMode(LeftButton, INPUT);
   pinMode(BackButton, INPUT);
 
-  xRestMin = 375;
-  xRestMax = 455;
-  LinacRestMin = 50;
-  LinacRestMax = 392;
-  LinacExtendMax = 392;
-  LinacExtendMin = 50;
-
-
-
-  yRestMin = 512;
-  yRestMax = 650;
-
- 
-
-
   Serial.begin(9600);
   Serial1.begin(9600);
 }
@@ -273,7 +263,7 @@ void loop() {
   t0 = micros();
 // loop logic
   elapsed = micros() - t0;
-  Serial.println(elapsed);
+  // Serial.println(elapsed);
 
   //Changing Values;
 
@@ -313,8 +303,8 @@ void loop() {
   }
 
   //Drive Controlss
-  String haStatus;
-  String proxStatus;
+  const char* haStatus;
+  const char* proxStatus;
 
   if (StopStatus == 0) {
     if (Forward == HIGH && ultra_front.check_prox()) {
@@ -359,12 +349,13 @@ void loop() {
             }
             haStatus = "RIGHT";
             break;
-          case BACK:
-            Serial.println("B");
+          case FRONT:
+            Serial.println("F");
             if (ultra_back.check_prox()) {
               ramp_speed(MaxMotorSpeed);
-              digitalWrite(motor1a, LOW);
-              analogWrite(motor1b, ButtonMotorSpeed);
+              analogWrite(motor1a, ButtonMotorSpeed);
+              digitalWrite(motor1b, LOW);
+               haStatus = "FRONT";
             } 
             break;
           case NONE:
@@ -372,20 +363,21 @@ void loop() {
             digitalWrite(motor1b, LOW);
             digitalWrite(LinacA, LOW);
             digitalWrite(LinacB, LOW); 
-            haStatus = "NONE";
+             haStatus = "NONE";
 
             if (digitalRead(UltrasonicButton)) {
               if (!ultra_back.check_prox()) {
-                proxStatus = "BACK";
+                 proxStatus = "BACK";
               } else if (!ultra_front.check_prox()) {
-                proxStatus = "FRONT";
+                 proxStatus = "FRONT";
+
               } else if (!ultra_back.check_prox() && !ultra_front.check_prox()){
-                proxStatus = "BACK";
+                 proxStatus = "BOTH";
               } else {
-                proxStatus = "NONE";
+                 proxStatus = "NONE";
               }
             } else {
-              proxStatus = "OFF";
+               proxStatus = "OFF";
             }
             
             ButtonMotorSpeed = 25;
@@ -396,18 +388,16 @@ void loop() {
         digitalWrite(motor1b, LOW);
         digitalWrite(LinacA, LOW);
         digitalWrite(LinacB, LOW); 
-        haStatus = "OFF";
+         haStatus = "OFF";
         ButtonMotorSpeed = 25;
       }
   }
  
-  char sendData[100];
+  char sendData[200];
 
   Serial1.write(sendData);
   snprintf(sendData, sizeof(sendData), "<MS: ,%i, HA: ,%s,P: ,%s>", MaxMotorSpeed, haStatus, proxStatus);
 
-  //Send MaxMotorSpeed, Head Array Status, Prox,
-  // Serial1.print("<MS, 1, HA, 0, P, 2>");
-  
+  // Send MaxMotorSpeed, Head Array Status, Prox,  
   delay(100);
 }
