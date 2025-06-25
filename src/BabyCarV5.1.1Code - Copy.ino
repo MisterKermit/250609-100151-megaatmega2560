@@ -267,7 +267,7 @@ void loop() {
 
   //Changing Values;
 
-  int MaxMotorSpeed = map(analogRead(Potentiometer), 0, 1023, 25, 255);  //last number value is max motor speed
+  int MaxMotorSpeed = map(analogRead(Potentiometer), 0, 1023, 25, 300);  //last number value is max motor speed
 
 
   RealLinacPos = analogRead(LinacPosPin);
@@ -391,6 +391,13 @@ void loop() {
          haStatus = "OFF";
         ButtonMotorSpeed = 25;
       }
+  } else {
+    digitalWrite(motor1a, LOW);
+    digitalWrite(motor1b, LOW);
+    digitalWrite(LinacA, LOW);
+    digitalWrite(LinacB, LOW); 
+    haStatus = "OFF", proxStatus = "OFF";
+    ButtonMotorSpeed = 25;
   }
  
   char sendData[200];
