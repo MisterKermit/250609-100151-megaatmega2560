@@ -177,7 +177,7 @@ public:
 
 void ramp_speed(int maxSpeed) {
   if (ButtonMotorSpeed < maxSpeed) {
-    ButtonMotorSpeed++;
+    ButtonMotorSpeed += 5;
   }
 }
 
@@ -255,7 +255,7 @@ void setup() {
   pinMode(BackButton, INPUT);
 
   Serial.begin(9600);
-  Serial1.begin(9600);
+  Serial2.begin(9600);
 }
 
 
@@ -307,6 +307,7 @@ void loop() {
   const char* proxStatus;
 
   if (StopStatus == 0) {
+    
     if (Forward == HIGH && ultra_front.check_prox()) {
         Serial.println("Forward");
         ramp_speed(MaxMotorSpeed);
@@ -388,7 +389,7 @@ void loop() {
         digitalWrite(motor1b, LOW);
         digitalWrite(LinacA, LOW);
         digitalWrite(LinacB, LOW); 
-         haStatus = "OFF";
+        haStatus = "OFF";
         ButtonMotorSpeed = 25;
       }
   } else {
@@ -396,14 +397,17 @@ void loop() {
     digitalWrite(motor1b, LOW);
     digitalWrite(LinacA, LOW);
     digitalWrite(LinacB, LOW); 
-    haStatus = "OFF", proxStatus = "OFF";
+    haStatus = "OFF";
+    proxStatus = "OFF";
     ButtonMotorSpeed = 25;
   }
  
   char sendData[200];
 
-  Serial1.write(sendData);
-  snprintf(sendData, sizeof(sendData), "<MS: ,%i, HA: ,%s,P: ,%s>", MaxMotorSpeed, haStatus, proxStatus);
+  // Serial1.write(sendData); 
+  // snprintf(sendData, sizeof(sendData), "<MS: ,%i, HA: ,%s,P: ,%s>", MaxMotorSpeed, haStatus, proxStatus);
+  snprintf(sendData, sizeof(sendData), "<MS: ,%i, HA: ,%s,P: ,%s>", 1, "skib", "idi");
+
 
   // Send MaxMotorSpeed, Head Array Status, Prox,  
   delay(100);
