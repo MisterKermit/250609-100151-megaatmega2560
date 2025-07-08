@@ -146,7 +146,7 @@ public:
     }
 
     return distance;
-    delay(100);
+    delayMicroseconds(10);
   }
 
   int get_dist() {
@@ -168,17 +168,16 @@ public:
 
   bool check_head_array() {
     if (digitalRead(HeadArrayButton) == HIGH) {
-      return update() > 30;
+      return update() > 15;
     } else {
       return true;
     }
   }
 };
 
-void ramp_speed(int maxSpeed) {
-  if (ButtonMotorSpeed < maxSpeed) {
-    ButtonMotorSpeed += 5;
-  }
+void ramp_speed(int targetSpeed) {
+  if (ButtonMotorSpeed < targetSpeed) ButtonMotorSpeed += 5;
+  else if (ButtonMotorSpeed > targetSpeed) ButtonMotorSpeed -= 5;
 }
 
 Ultrasonic ultra_front(UltraFrontEcho, UltraFrontTrig, NONE);
@@ -255,7 +254,7 @@ void setup() {
   pinMode(BackButton, INPUT);
 
   Serial.begin(9600);
-  Serial2.begin(9600);
+  Serial1.begin(9600);
 }
 
 
@@ -303,95 +302,102 @@ void loop() {
   }
 
   //Drive Controlss
-  const char* haStatus;
-  const char* proxStatus;
+  const char* haStatus = "OFF";
+  const char* proxStatus = "OFF";
+
+  bool frontProx = ultra_front.check_prox();
+  bool backProx = ultra_back.check_prox();
 
   if (StopStatus == 0) {
+
+    if (digitalRead(UltrasonicButton)) {
+      if (!backProx) {
+          proxStatus = "BACK";
+      } else if (!frontProx) {
+          proxStatus = "FRONT";
+
+      } else if (!backProx && !frontProx){
+          proxStatus = "BOTH";
+      } else {
+          proxStatus = "NONE";
+      }
+    } else {
+        proxStatus = "OFF";
+    }
     
-    if (Forward == HIGH && ultra_front.check_prox()) {
+    if (Forward == HIGH && frontProx) {
         Serial.println("Forward");
         ramp_speed(MaxMotorSpeed);
         analogWrite(motor1a, ButtonMotorSpeed);
         digitalWrite(motor1b, LOW);  //WIP
-      } else if (Right == HIGH && RealLinacPos < LinacUpperLimit) {
+    }
+    if (Right == HIGH && RealLinacPos < LinacUpperLimit) {
         Serial.println("Right");
         digitalWrite(LinacA, HIGH);
         digitalWrite(LinacB, LOW);
-      } else if (Left == HIGH && RealLinacPos > LinacLowerLimit) {
+    }
+    if (Left == HIGH && RealLinacPos > LinacLowerLimit) {
         Serial.println("Left");
         digitalWrite(LinacB, HIGH);
         digitalWrite(LinacA, LOW);
-      } else if (Back == HIGH && (ultra_back.check_prox())) {
+    }
+    if (Back == HIGH && (backProx)) {
         Serial.println("Back");
         ramp_speed(MaxMotorSpeed);
         digitalWrite(motor1a, LOW);
         analogWrite(motor1b, ButtonMotorSpeed);
-      } else if (digitalRead(HeadArrayButton) == HIGH) {
-        switch(check_head_array()) {
-          case LEFT:
-            Serial.println("L");
-            if (RealLinacPos > LinacLowerLimit) {
-              digitalWrite(LinacB, HIGH);
-              digitalWrite(LinacA, LOW);
-            } else {
-              digitalWrite(LinacB, LOW);
-              digitalWrite(LinacA, LOW);
-            }
-            haStatus = "LEFT";
-            break;
-          case RIGHT:
-            Serial.println("R");
-            if (RealLinacPos <= LinacUpperLimit) {
-              digitalWrite(LinacA, HIGH);
-              digitalWrite(LinacB, LOW);
-            } else {
-              digitalWrite(LinacB, LOW);
-              digitalWrite(LinacA, LOW);
-            }
-            haStatus = "RIGHT";
-            break;
-          case FRONT:
-            Serial.println("F");
-            if (ultra_back.check_prox()) {
-              ramp_speed(MaxMotorSpeed);
-              analogWrite(motor1a, ButtonMotorSpeed);
-              digitalWrite(motor1b, LOW);
-               haStatus = "FRONT";
-            } 
-            break;
-          case NONE:
-            digitalWrite(motor1a, LOW);
-            digitalWrite(motor1b, LOW);
+    }
+    if (digitalRead(HeadArrayButton) == HIGH) {
+      switch(check_head_array()) {
+        case LEFT:
+          Serial.println("L");
+          if (RealLinacPos > LinacLowerLimit) {
+            digitalWrite(LinacB, HIGH);
             digitalWrite(LinacA, LOW);
-            digitalWrite(LinacB, LOW); 
-             haStatus = "NONE";
-
-            if (digitalRead(UltrasonicButton)) {
-              if (!ultra_back.check_prox()) {
-                 proxStatus = "BACK";
-              } else if (!ultra_front.check_prox()) {
-                 proxStatus = "FRONT";
-
-              } else if (!ultra_back.check_prox() && !ultra_front.check_prox()){
-                 proxStatus = "BOTH";
-              } else {
-                 proxStatus = "NONE";
-              }
-            } else {
-               proxStatus = "OFF";
-            }
-            
-            ButtonMotorSpeed = 25;
-            break;
-        }
-      } else {
-        digitalWrite(motor1a, LOW);
-        digitalWrite(motor1b, LOW);
-        digitalWrite(LinacA, LOW);
-        digitalWrite(LinacB, LOW); 
-        haStatus = "OFF";
-        ButtonMotorSpeed = 25;
+          } else {
+            digitalWrite(LinacB, LOW);
+            digitalWrite(LinacA, LOW);
+          }
+          haStatus = "LEFT";
+          break;
+        case RIGHT:
+          Serial.println("R");
+          if (RealLinacPos <= LinacUpperLimit) {
+            digitalWrite(LinacA, HIGH);
+            digitalWrite(LinacB, LOW);
+          } else {
+            digitalWrite(LinacB, LOW);
+            digitalWrite(LinacA, LOW);
+          }
+          haStatus = "RIGHT";
+          break;
+        case FRONT:
+          Serial.println("F");
+          if (backProx) {
+            ramp_speed(MaxMotorSpeed);
+            analogWrite(motor1a, ButtonMotorSpeed);
+            digitalWrite(motor1b, LOW);
+            haStatus = "FRONT";
+          } 
+          break;
+        case NONE:
+          digitalWrite(motor1a, LOW);
+          digitalWrite(motor1b, LOW);
+          digitalWrite(LinacA, LOW);
+          digitalWrite(LinacB, LOW); 
+            haStatus = "NONE";
+          
+          ButtonMotorSpeed = 25;
+          break;
       }
+    } else {
+      digitalWrite(motor1a, LOW);
+      digitalWrite(motor1b, LOW);
+      digitalWrite(LinacA, LOW);
+      digitalWrite(LinacB, LOW); 
+      haStatus = "OFF";
+      ButtonMotorSpeed = 25;
+    }
   } else {
     digitalWrite(motor1a, LOW);
     digitalWrite(motor1b, LOW);
@@ -404,11 +410,13 @@ void loop() {
  
   char sendData[200];
 
+
+  
+  snprintf(sendData, sizeof(sendData), "<MS: ,%i,HA: ,%s,PA: ,%s>", MaxMotorSpeed, haStatus, proxStatus);
   // Serial1.write(sendData); 
-  // snprintf(sendData, sizeof(sendData), "<MS: ,%i, HA: ,%s,P: ,%s>", MaxMotorSpeed, haStatus, proxStatus);
-  snprintf(sendData, sizeof(sendData), "<MS: ,%i, HA: ,%s,P: ,%s>", 1, "skib", "idi");
+  Serial1.println(sendData);
+  // snprintf(sendData, sizeof(sendData), "<%s,%i,%s,%s,%s,%s>", 1, "skib", "idi");
+  // Serial1.println(sendData);
 
-
-  // Send MaxMotorSpeed, Head Array Status, Prox,  
-  delay(100);
+  // Send MaxMotor  Speed, Head Array Status, Prox,  
 }
