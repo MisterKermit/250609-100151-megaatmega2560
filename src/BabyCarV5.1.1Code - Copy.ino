@@ -146,7 +146,7 @@ public:
     }
 
     return distance;
-    delayMicroseconds(10);
+    delay(100);
   }
 
   int get_dist() {
@@ -177,7 +177,6 @@ public:
 
 void ramp_speed(int targetSpeed) {
   if (ButtonMotorSpeed < targetSpeed) ButtonMotorSpeed += 5;
-  else if (ButtonMotorSpeed > targetSpeed) ButtonMotorSpeed -= 5;
 }
 
 Ultrasonic ultra_front(UltraFrontEcho, UltraFrontTrig, NONE);
@@ -249,9 +248,9 @@ void setup() {
 
   //Buttons
   pinMode(ForwardButton, INPUT);
-  pinMode(RightButton, INPUT);
-  pinMode(LeftButton, INPUT);
-  pinMode(BackButton, INPUT);
+  pinMode(RightButton, INPUT_PULLUP);
+  pinMode(LeftButton, INPUT_PULLUP);
+  pinMode(BackButton, INPUT_PULLUP);
 
   Serial.begin(9600);
   Serial1.begin(9600);
@@ -288,17 +287,17 @@ void loop() {
   PreviousStopButtonState = CurrentStopButtonState;
   CurrentStopButtonState = (digitalRead(StopButton));
 
+  head_array_state currentState = check_head_array();
+
   if ((CurrentStopButtonState == 1) && (PreviousStopButtonState == 0)) {
     if (StopStatus == 0) {
       StopStatus = 1;
+      digitalWrite(StopLED, HIGH);
+
     } else if (StopStatus == 1) {
       StopStatus = 0;
+      digitalWrite(StopLED, LOW);
     }
-  }
-  if (StopStatus == 1) {
-    digitalWrite(StopLED, HIGH);
-  } else if (StopStatus == 0) {
-    digitalWrite(StopLED, LOW);
   }
 
   //Drive Controlss
@@ -315,7 +314,6 @@ void loop() {
           proxStatus = "BACK";
       } else if (!frontProx) {
           proxStatus = "FRONT";
-
       } else if (!backProx && !frontProx){
           proxStatus = "BOTH";
       } else {
@@ -324,31 +322,38 @@ void loop() {
     } else {
         proxStatus = "OFF";
     }
-    
+
     if (Forward == HIGH && frontProx) {
         Serial.println("Forward");
         ramp_speed(MaxMotorSpeed);
         analogWrite(motor1a, ButtonMotorSpeed);
-        digitalWrite(motor1b, LOW);  //WIP
-    }
-    if (Right == HIGH && RealLinacPos < LinacUpperLimit) {
-        Serial.println("Right");
-        digitalWrite(LinacA, HIGH);
-        digitalWrite(LinacB, LOW);
-    }
-    if (Left == HIGH && RealLinacPos > LinacLowerLimit) {
-        Serial.println("Left");
-        digitalWrite(LinacB, HIGH);
-        digitalWrite(LinacA, LOW);
-    }
-    if (Back == HIGH && (backProx)) {
+        digitalWrite(motor1b, LOW);
+    } else if (Back == HIGH && backProx) {
         Serial.println("Back");
         ramp_speed(MaxMotorSpeed);
         digitalWrite(motor1a, LOW);
         analogWrite(motor1b, ButtonMotorSpeed);
+    } else {
+      digitalWrite(motor1a, LOW);
+      digitalWrite(motor1b, LOW);
+      ButtonMotorSpeed = 25;
     }
+    
+    if (Right == HIGH && RealLinacPos < LinacUpperLimit) {
+      Serial.println("Right");
+      digitalWrite(LinacA, HIGH);
+      digitalWrite(LinacB, LOW);
+    } else if (Left == HIGH && RealLinacPos > LinacLowerLimit) {
+      Serial.println("Left");
+      digitalWrite(LinacB, HIGH);
+      digitalWrite(LinacA, LOW);
+    } else {
+      digitalWrite(LinacB, LOW);
+      digitalWrite(LinacA, LOW);
+    }
+    
     if (digitalRead(HeadArrayButton) == HIGH) {
-      switch(check_head_array()) {
+      switch(currentState) {
         case LEFT:
           Serial.println("L");
           if (RealLinacPos > LinacLowerLimit) {
@@ -373,7 +378,7 @@ void loop() {
           break;
         case FRONT:
           Serial.println("F");
-          if (backProx) {
+          if (frontProx) {
             ramp_speed(MaxMotorSpeed);
             analogWrite(motor1a, ButtonMotorSpeed);
             digitalWrite(motor1b, LOW);
@@ -381,13 +386,7 @@ void loop() {
           } 
           break;
         case NONE:
-          digitalWrite(motor1a, LOW);
-          digitalWrite(motor1b, LOW);
-          digitalWrite(LinacA, LOW);
-          digitalWrite(LinacB, LOW); 
-            haStatus = "NONE";
-          
-          ButtonMotorSpeed = 25;
+          haStatus = "NONE";
           break;
       }
     } else {
@@ -412,11 +411,12 @@ void loop() {
 
 
   
-  snprintf(sendData, sizeof(sendData), "<MS: ,%i,HA: ,%s,PA: ,%s>", MaxMotorSpeed, haStatus, proxStatus);
+  snprintf(sendData, sizeof(sendData), "<MS: ,%i, HA: ,%s,PA: ,%s>", MaxMotorSpeed, haStatus, proxStatus);
   // Serial1.write(sendData); 
   Serial1.println(sendData);
   // snprintf(sendData, sizeof(sendData), "<%s,%i,%s,%s,%s,%s>", 1, "skib", "idi");
   // Serial1.println(sendData);
 
   // Send MaxMotor  Speed, Head Array Status, Prox,  
+  delay(100);
 }
