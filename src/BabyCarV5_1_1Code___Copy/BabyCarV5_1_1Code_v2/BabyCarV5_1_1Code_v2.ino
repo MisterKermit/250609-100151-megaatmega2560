@@ -196,11 +196,11 @@ int linacSpeed(int pos) {
   }
 }
 
-int recenter(int Right, int Left, int pos) {
-  if (Right == LOW && Left == LOW && pos < LinacMidLow) {
+int recenter(int pos) {
+  if (pos < LinacMidLow) {
     analogWrite(LinacA, linacSpeed(pos));
     digitalWrite(LinacB, LOW);
-  } else if (Right == LOW && Left == LOW && pos > LinacMidHigh) {
+  } else if (pos > LinacMidHigh) {
     analogWrite(LinacB, linacSpeed(pos));
     digitalWrite(LinacA, LOW);
   } else {
@@ -454,12 +454,12 @@ void loop() {
               digitalWrite(motor1a, LOW);
               digitalWrite(motor1b, LOW);
             }
-            recenter(LOW, LOW, RealLinacPos);
+            recenter(RealLinacPos);
             break;
           case NONE:
             digitalWrite(motor1a, LOW);
             digitalWrite(motor1b, LOW);
-            recenter(LOW, LOW, RealLinacPos);
+            recenter(RealLinacPos);
              haStatus = "NONE";
 
             if (digitalRead(UltrasonicButton)) {
@@ -484,7 +484,8 @@ void loop() {
         digitalWrite(motor1a, LOW);
         digitalWrite(motor1b, LOW);
         digitalWrite(LinacA, LOW);
-        digitalWrite(LinacB, LOW); 
+        digitalWrite(LinacB, LOW);
+        recenter(RealLinacPos);
         haStatus = "OFF";
         ButtonMotorSpeed = 25;
       }
@@ -492,7 +493,7 @@ void loop() {
     digitalWrite(motor1a, LOW);
     digitalWrite(motor1b, LOW);
     digitalWrite(LinacA, LOW);
-    digitalWrite(LinacB, LOW); 
+    digitalWrite(LinacB, LOW);
     haStatus = "OFF";
     proxStatus = "OFF";
     ButtonMotorSpeed = 25;
